@@ -17,7 +17,9 @@ from clustering_methods.hierarchical_clustering import hierarchical_clustering
 # -------------------------------------------------
 
 
-def load_and_prepare_data(file_path: str, target_col=None, normalize=True, random_state=42):
+def load_and_prepare_data(
+    file_path: str, target_col=None, normalize=True, random_state=42
+):
     """Load CSV, clean, extract target, encode features, return X, y, and full DataFrame (df)."""
     df = pd.read_csv(file_path, index_col=0)
     df = df.dropna(axis=0, how="any")
@@ -25,7 +27,6 @@ def load_and_prepare_data(file_path: str, target_col=None, normalize=True, rando
 
     df.columns = df.columns.str.strip()  # Clean column names
 
-    
     df["Cohort"] = (
         df["Cohort"]
         .replace({"D1_4": "D1_3", "D1_5": "D1_3", "D1_6": "D1_3"})
@@ -33,12 +34,14 @@ def load_and_prepare_data(file_path: str, target_col=None, normalize=True, rando
         .str[1]
         .astype(int)
     )
-    df["Round"] = df["Round"].str.split("_").str[1].astype(int)  
+    df["Round"] = df["Round"].str.split("_").str[1].astype(int)
     df["Phase"] = df["Phase"].str.split("e").str[1].astype(int)
 
     # Basic categorical handling (specific to HR_data.csv)
     categorical_cols = ["Cohort", "Round", "Phase"]
-    categorical_cols = [col for col in categorical_cols if col in df.columns and col != target_col]
+    categorical_cols = [
+        col for col in categorical_cols if col in df.columns and col != target_col
+    ]
     df = pd.get_dummies(df, columns=categorical_cols)
 
     # Extract target column if specified
@@ -46,24 +49,17 @@ def load_and_prepare_data(file_path: str, target_col=None, normalize=True, rando
         if target_col not in df.columns:
             raise ValueError(f"Target column '{target_col}' not found in data.")
         y = df[target_col].values.squeeze()
-        X_cols = df.drop(columns = target_col).columns.tolist()
+        X_cols = df.drop(columns=target_col).columns.tolist()
     else:
         y = None
         X_cols = list(df.columns)
 
-    
-
-    
-    
-    
     X = df[X_cols].astype(float)
 
     if normalize:
         X = (X - X.min()) / (X.max() - X.min())
 
-    return X.values, y, df  
-
-
+    return X.values, y, df
 
 
 # -------------------------------------------------
@@ -174,7 +170,9 @@ def run_all(X: np.ndarray, y: np.ndarray, n_clusters: int = 3):
 # -------------------------------------------------
 
 
-def plot_3d_clusters(X: np.ndarray, labels: np.ndarray, title: str, target_labels=None,  target_name=None):
+def plot_3d_clusters(
+    X: np.ndarray, labels: np.ndarray, title: str, target_labels=None, target_name=None
+):
     pca = PCA(n_components=3)
     X3 = pca.fit_transform(X)
 
@@ -182,7 +180,6 @@ def plot_3d_clusters(X: np.ndarray, labels: np.ndarray, title: str, target_label
     ax = fig.add_subplot(111, projection="3d")
     cmap = plt.cm.tab10
 
-    
     if target_labels is not None:
         for val in np.unique(target_labels):
             mask = target_labels == val
@@ -216,7 +213,9 @@ def plot_3d_clusters(X: np.ndarray, labels: np.ndarray, title: str, target_label
     return fig
 
 
-def print_cluster_labels(labels: np.ndarray, name, target_labels=None, target_name= "Target"):
+def print_cluster_labels(
+    labels: np.ndarray, name, target_labels=None, target_name="Target"
+):
     """Prints the cluster labels, their corresponding cohort labels, and proportions."""
     print(f"\n--- {name.upper()} CLUSTER LABELS ---")
     total_samples = len(labels)
@@ -238,20 +237,25 @@ def print_cluster_labels(labels: np.ndarray, name, target_labels=None, target_na
             proportion = mask.sum() / total_samples * 100
             print(f"Cluster {k}: {mask.sum()} samples ({proportion:.2f}%)")
 
+
 # -------------------------------------------------
 # 5. MAIN
 # -------------------------------------------------
 
+
 def main():
-    target = "Cohort" #choose target column for supervised or None for unsupervised
-    X, y, df = load_and_prepare_data("HR_data.csv", target_col=None) # chose target or none for unsupervised
+    target = "Cohort"  # choose target column for supervised or None for unsupervised
+    X, y, df = load_and_prepare_data(
+        "./data/HR_data.csv", target_col="Cohort"
+    )  # chose target or none for unsupervised
 
     # If no explicit y was extracted, reconstruct it from df for plotting only
     if y is None:
         target_cols = [col for col in df.columns if col.startswith(f"{target}_")]
         if target_cols:
             plot_labels = (
-                df[target_cols].idxmax(axis=1)
+                df[target_cols]
+                .idxmax(axis=1)
                 .str.extract(r"_(\d+)")
                 .squeeze()
                 .astype(float)
@@ -270,12 +274,16 @@ def main():
                 y = pd.Series(y).astype("category").cat.codes.values
         plot_labels = y
 
-    models, metrics = run_all(X, y=None, n_clusters=3)  
+    models, metrics = run_all(X, y=None, n_clusters=6)
 
     print("\n--- METRIC SUMMARY ---")
     for name, m in metrics.items():
         print(f"\n{name.upper()}:")
-        print(f"Silhouette: {m['silhouette']:.4f}" if not np.isnan(m["silhouette"]) else "Silhouette: n/a")
+        print(
+            f"Silhouette: {m['silhouette']:.4f}"
+            if not np.isnan(m["silhouette"])
+            else "Silhouette: n/a"
+        )
         print(f"Within‑cluster dispersion (W): {m['within_dispersion']:.2f}")
         if name == "kmeans":
             opt_k = m["gap_k"][np.argmax(m["gap"])]
@@ -284,11 +292,92 @@ def main():
             print(f"AIC: {m['aic']:.2f}  |  BIC: {m['bic']:.2f}")
 
     for name, mdl in models.items():
-        plot_3d_clusters(X, mdl["labels"], name, target_labels=plot_labels, target_name=target)
+        plot_3d_clusters(
+            X, mdl["labels"], name, target_labels=plot_labels, target_name=target
+        )
         print_cluster_labels(mdl["labels"], name, target_labels=plot_labels)
 
     plt.show()
 
 
+def model_selection_stats():
+    target = "Cohort"  # choose target column for supervised or None for unsupervised
+    X, y, df = load_and_prepare_data(
+        "./data/HR_data.csv", target_col="Cohort"
+    )  # chose target or none for unsupervised
+
+    # If no explicit y was extracted, reconstruct it from df for plotting only
+    if y is None:
+        target_cols = [col for col in df.columns if col.startswith(f"{target}_")]
+        if target_cols:
+            plot_labels = (
+                df[target_cols]
+                .idxmax(axis=1)
+                .str.extract(r"_(\d+)")
+                .squeeze()
+                .astype(float)
+                .dropna()
+                .astype(int)
+                .values
+            )
+        else:
+            plot_labels = None
+    else:
+        # Convert categorical y (if necessary) for plotting
+        if not np.issubdtype(y.dtype, np.integer):
+            try:
+                y = pd.Series(y).astype(int).values
+            except ValueError:
+                y = pd.Series(y).astype("category").cat.codes.values
+        plot_labels = y
+
+    metrics = ["silhouette", "within_dispersion"]
+    methods = ["kmeans", "gmm", "hierarchical"]
+    saved_metrics = {meth: {metric: list() for metric in metrics} for meth in methods}
+
+    ns = range(2, 40)
+    for n_clusters in ns:
+        models, metrics = run_all(X, y=None, n_clusters=n_clusters)
+        for name, m in metrics.items():
+            saved_metrics[name]["silhouette"].append(metrics[name]["silhouette"])
+            saved_metrics[name]["within_dispersion"].append(
+                metrics[name]["within_dispersion"]
+            )
+
+    # Adjust this depending on how many metrics you have
+    num_methods = len(saved_metrics)
+    fig, axes = plt.subplots(1, num_methods, figsize=(6 * num_methods, 5), sharex=True)
+
+    # Make sure axes is iterable (even if there's only one method)
+    if num_methods == 1:
+        axes = [axes]
+
+    for i, (meth, ax1) in enumerate(zip(saved_metrics.keys(), axes)):
+        ax1.plot(ns, saved_metrics[meth]["silhouette"], "b-", label="Silhouette")
+        ax1.set_ylabel("Silhouette", color="b")
+        ax1.tick_params(axis="y", labelcolor="b")
+        ax1.set_xlabel("n")
+
+        ax2 = ax1.twinx()
+        ax2.plot(
+            ns,
+            saved_metrics[meth]["within_dispersion"],
+            "r-",
+            label="Within Dispersion",
+        )
+        ax2.set_ylabel("Within Dispersion", color="r")
+        ax2.tick_params(axis="y", labelcolor="r")
+
+        ax1.set_title(meth)
+
+        # Combine legends from both axes
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper center")
+
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
-    main()
+    model_selection_stats()
